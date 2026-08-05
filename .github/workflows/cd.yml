@@ -1,0 +1,45 @@
+name: CD
+
+# M4: Continuous Deployment. Runs after CI succeeds on main.
+#
+# This deploys to a machine running a SELF-HOSTED GitHub Actions runner (your
+# laptop or a VM) because GitHub-hosted runners cannot reach a local target.
+# It pulls the freshly-published image and restarts the Compose stack, then runs
+# the smoke test and FAILS the pipeline if the smoke test fails.
+#
+# Alternative (zero-runner) CD: run Watchtower (see docker-compose.yml) to
+# auto-pull new images, and run the smoke test locally via `make smoke`.
+#
+# Setup a self-hosted runner: repo Settings -> Actions -> Runners -> New runner.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    # only deploy if the CI run actually succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull latest image and (re)deploy
+        run: |
+          docker compose pull
+          docker compose up -d
+
+      - name: Wait for service
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8000/health >/dev/null; then exit 0; fi
+            echo "waiting for service... ($i)"; sleep 3
+          done
+          echo "service did not become healthy"; exit 1
+
+      - name: Smoke test (fail pipeline on failure)
+        run: |
+          chmod +x scripts/smoke_test.sh
+          BASE_URL=http://localhost:8000 ./scripts/smoke_test.sh

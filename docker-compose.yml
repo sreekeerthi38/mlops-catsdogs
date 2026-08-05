@@ -1,0 +1,42 @@
+# M4 deployment target (Docker Compose) + M5 monitoring.
+#
+# `api` is built locally by default. For the CD demo, comment out `build:` and
+# uncomment `image:` so Compose pulls the published GHCR image (replace OWNER/REPO).
+services:
+  api:
+    build: .
+    # image: ghcr.io/owner/repo:latest
+    container_name: catsdogs-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=/app/models/model.pt
+    volumes:
+      - ./models:/app/models:ro   # serve the latest trained model without rebuilding
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: catsdogs-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # Optional zero-runner CD: auto-pull new images and restart `api`.
+  # Only useful when `api` uses `image:` (a registry image), not `build:`.
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: catsdogs-watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 30 --cleanup catsdogs-api
+    restart: unless-stopped

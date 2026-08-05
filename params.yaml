@@ -1,0 +1,11 @@
+# Central hyperparameters. Edit here instead of hard-coding in scripts.
+data:
+  img_size: 224
+  split: [0.8, 0.1, 0.1]   # train / val / test
+  subset: 2000             # cap images for CPU-friendly training (0 = use all)
+
+train:
+  experiment: cats-vs-dogs
+  epochs: 3
+  batch_size: 32
+  lr: 0.001

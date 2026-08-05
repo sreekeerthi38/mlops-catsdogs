@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Data & models (tracked by DVC, not Git)
+data/processed/
+data/_synthetic_raw/
+data/*.zip
+models/*.pt
+models/*.png
+models/*.json
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# DVC
+.dvc/cache/
+.dvc/tmp/
+
+# Test / tooling
+.pytest_cache/
+.coverage
+htmlcov/

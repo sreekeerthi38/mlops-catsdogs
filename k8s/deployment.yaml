@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catsdogs-api
+  labels:
+    app: catsdogs-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: catsdogs-api
+  template:
+    metadata:
+      labels:
+        app: catsdogs-api
+    spec:
+      containers:
+        - name: api
+          # replace OWNER/REPO with your GitHub repo (lowercase)
+          image: ghcr.io/OWNER/REPO:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1536Mi"
