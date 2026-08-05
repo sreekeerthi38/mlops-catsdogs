@@ -1,3 +1,0 @@
-# Patterns DVC should ignore
-*.tmp
-__pycache__/
