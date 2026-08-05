@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Tuple
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFile
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 from .config import IMAGENET_MEAN, IMAGENET_STD, IMG_SIZE
 
