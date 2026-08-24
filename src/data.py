@@ -15,9 +15,11 @@ from typing import Tuple
 import numpy as np
 from PIL import Image, ImageFile
 
-ImageFile.LOAD_TRUNCATED_IMAGES = True
-
 from .config import IMAGENET_MEAN, IMAGENET_STD, IMG_SIZE
+
+# The Kaggle Dogs-vs-Cats archive contains a handful of truncated JPEGs that
+# otherwise raise OSError mid-epoch.
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 _MEAN = np.array(IMAGENET_MEAN, dtype=np.float32)
 _STD = np.array(IMAGENET_STD, dtype=np.float32)
@@ -98,13 +100,20 @@ def make_dataloaders(processed_dir: Path, batch_size: int = 32,
 # ---------------------------------------------------------------------------
 def split_dataset(raw_pairs, out_dir: Path,
                   ratios: Tuple[float, float, float] = (0.8, 0.1, 0.1),
-                  seed: int = 42) -> dict:
+                  seed: int = 42, clean: bool = True) -> dict:
     """Copy (src_path, class_name) pairs into out_dir/{train,val,test}/{class}.
+
+    ``clean=True`` wipes ``out_dir`` first. Without it, a second run with a
+    smaller ``--subset`` leaves orphaned files from the previous run behind
+    (filenames are index-based, so only the first N get overwritten) and the
+    resulting splits silently mix two different datasets.
 
     Returns a dict of counts per split.
     """
     assert abs(sum(ratios) - 1.0) < 1e-6, "ratios must sum to 1.0"
     out_dir = Path(out_dir)
+    if clean and out_dir.exists():
+        shutil.rmtree(out_dir)
     rng = random.Random(seed)
 
     # group by class then shuffle within class for a stratified split

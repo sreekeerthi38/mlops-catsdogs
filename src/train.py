@@ -1,7 +1,8 @@
-"""M1: train the baseline CNN, log everything to MLflow, and serialize the model.
+"""M1: train a model, log everything to MLflow, and serialize the artifact.
 
-Run:
-    python -m src.train --epochs 3 --batch-size 32
+Run both architectures so the tracker holds a genuine comparison:
+    python -m src.train --arch simple_cnn   --epochs 3
+    python -m src.train --arch mobilenet_v2 --epochs 3
 
 MLflow writes to a local ./mlruns store by default (no server needed). View with:
     mlflow ui
@@ -24,7 +25,7 @@ from sklearn.metrics import confusion_matrix
 
 from .config import CLASSES, MODELS_DIR, PROCESSED_DIR, load_params
 from .data import make_dataloaders
-from .model import SimpleCNN
+from .model import build_model
 
 
 def evaluate(model, loader, device) -> tuple[float, float, np.ndarray, np.ndarray]:
@@ -45,13 +46,14 @@ def evaluate(model, loader, device) -> tuple[float, float, np.ndarray, np.ndarra
     return loss_sum / max(total, 1), correct / max(total, 1), np.array(y_true), np.array(y_pred)
 
 
-def _save_confusion_matrix(y_true, y_pred, out_path: Path) -> None:
+def _save_confusion_matrix(y_true, y_pred, out_path: Path, subtitle: str = "") -> None:
     cm = confusion_matrix(y_true, y_pred, labels=list(range(len(CLASSES))))
-    fig, ax = plt.subplots(figsize=(4, 4))
+    fig, ax = plt.subplots(figsize=(4.2, 4.2))
     im = ax.imshow(cm, cmap="Blues")
     ax.set_xticks(range(len(CLASSES)), CLASSES)
     ax.set_yticks(range(len(CLASSES)), CLASSES)
-    ax.set_xlabel("Predicted"); ax.set_ylabel("True"); ax.set_title("Confusion Matrix")
+    ax.set_xlabel("Predicted"); ax.set_ylabel("True")
+    ax.set_title(f"Confusion Matrix{(' - ' + subtitle) if subtitle else ''}")
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
             ax.text(j, i, int(cm[i, j]), ha="center", va="center")
@@ -59,41 +61,50 @@ def _save_confusion_matrix(y_true, y_pred, out_path: Path) -> None:
     fig.tight_layout(); fig.savefig(out_path, dpi=120); plt.close(fig)
 
 
-def _save_loss_curve(history: dict, out_path: Path) -> None:
+def _save_loss_curve(history: dict, out_path: Path, subtitle: str = "") -> None:
     fig, ax = plt.subplots(figsize=(5, 4))
     ax.plot(history["train_loss"], label="train_loss", marker="o")
     ax.plot(history["val_loss"], label="val_loss", marker="o")
-    ax.set_xlabel("epoch"); ax.set_ylabel("loss"); ax.set_title("Loss Curves"); ax.legend()
+    ax.set_xlabel("epoch"); ax.set_ylabel("loss")
+    ax.set_title(f"Loss Curves{(' - ' + subtitle) if subtitle else ''}")
+    ax.legend()
     fig.tight_layout(); fig.savefig(out_path, dpi=120); plt.close(fig)
 
 
 def main() -> None:
     params = load_params().get("train", {})
     ap = argparse.ArgumentParser()
+    ap.add_argument("--arch", type=str, default=params.get("arch", "mobilenet_v2"),
+                    choices=["simple_cnn", "mobilenet_v2"])
     ap.add_argument("--epochs", type=int, default=params.get("epochs", 3))
     ap.add_argument("--batch-size", type=int, default=params.get("batch_size", 32))
     ap.add_argument("--lr", type=float, default=params.get("lr", 1e-3))
     ap.add_argument("--data-dir", type=str, default=str(PROCESSED_DIR))
     ap.add_argument("--experiment", type=str, default=params.get("experiment", "cats-vs-dogs"))
+    ap.add_argument("--out-name", type=str, default="model.pt",
+                    help="filename under models/ (use per-arch names to keep both)")
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[train] device={device}")
+    print(f"[train] arch={args.arch} device={device}")
 
     train_loader, val_loader, test_loader = make_dataloaders(
         Path(args.data_dir), batch_size=args.batch_size, num_workers=0
     )
 
-    model = SimpleCNN(num_classes=len(CLASSES)).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    model = build_model(args.arch, num_classes=len(CLASSES), pretrained=True).to(device)
+    trainable = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.Adam(trainable, lr=args.lr)
     criterion = nn.CrossEntropyLoss()
+    print(f"[train] trainable params: {sum(p.numel() for p in trainable):,}")
 
     mlflow.set_experiment(args.experiment)
-    with mlflow.start_run() as run:
+    with mlflow.start_run(run_name=args.arch) as run:
         mlflow.log_params({
-            "epochs": args.epochs, "batch_size": args.batch_size,
-            "lr": args.lr, "model": "SimpleCNN", "img_size": 224,
-            "optimizer": "Adam", "device": str(device),
+            "arch": args.arch, "epochs": args.epochs, "batch_size": args.batch_size,
+            "lr": args.lr, "img_size": 224, "optimizer": "Adam", "device": str(device),
+            "trainable_params": sum(p.numel() for p in trainable),
+            "train_images": len(train_loader.dataset),
         })
 
         history = {"train_loss": [], "val_loss": [], "val_acc": []}
@@ -123,24 +134,25 @@ def main() -> None:
         test_loss, test_acc, y_true, y_pred = evaluate(model, test_loader, device)
         mlflow.log_metric("test_loss", test_loss)
         mlflow.log_metric("test_acc", test_acc)
-        print(f"[test] loss={test_loss:.4f} acc={test_acc:.4f}")
+        mlflow.log_metric("test_images", len(test_loader.dataset))
+        print(f"[test] loss={test_loss:.4f} acc={test_acc:.4f} n={len(test_loader.dataset)}")
 
         # ---- artifacts: plots + serialized model ----
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         cm_path = MODELS_DIR / "confusion_matrix.png"
         loss_path = MODELS_DIR / "loss_curve.png"
-        _save_confusion_matrix(y_true, y_pred, cm_path)
-        _save_loss_curve(history, loss_path)
+        _save_confusion_matrix(y_true, y_pred, cm_path, subtitle=args.arch)
+        _save_loss_curve(history, loss_path, subtitle=args.arch)
 
-        model_path = MODELS_DIR / "model.pt"
+        model_path = MODELS_DIR / args.out_name
         torch.save({"state_dict": model.state_dict(), "classes": CLASSES,
-                    "arch": "SimpleCNN"}, model_path)
-        (MODELS_DIR / "labels.json").write_text(json.dumps({"classes": CLASSES}, indent=2))
+                    "arch": args.arch}, model_path)
+        (MODELS_DIR / "labels.json").write_text(json.dumps(
+            {"classes": CLASSES, "arch": args.arch, "test_acc": round(test_acc, 4)}, indent=2))
 
         mlflow.log_artifact(str(cm_path))
         mlflow.log_artifact(str(loss_path))
         mlflow.log_artifact(str(model_path))
-        # log the model in MLflow's native format too (nice for the model registry)
         try:
             mlflow.pytorch.log_model(model, artifact_path="model")
         except Exception as exc:  # non-fatal; local artifact above is the source of truth

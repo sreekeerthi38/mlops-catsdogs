@@ -1,0 +1,8 @@
+{
+  "classes": [
+    "cat",
+    "dog"
+  ],
+  "arch": "simple_cnn",
+  "test_acc": 0.63
+}

@@ -1,6 +1,6 @@
 # Convenience targets. On Windows either install `make` (choco install make) or
 # run the underlying commands shown in each recipe by hand.
-.PHONY: help setup data data-synth train mlflow api test smoke perf \
+.PHONY: help setup data data-synth train train-baseline mlflow api test smoke perf \
         docker-build docker-run up down dvc-init clean
 
 IMAGE ?= catsdogs-api:local
@@ -26,13 +26,16 @@ setup:
 	pip install -r requirements.txt -r requirements-dev.txt
 
 data:
-	python scripts/prepare_data.py --raw-dir "$(RAW)" --subset $(or $(SUBSET),2000)
+	python scripts/prepare_data.py --raw-dir "$(RAW)"
 
 data-synth:
 	python scripts/prepare_data.py --synthetic --per-class 60
 
 train:
-	python -m src.train
+	python -m src.train --arch mobilenet_v2 --out-name model.pt
+
+train-baseline:
+	python -m src.train --arch simple_cnn --out-name model_simple_cnn.pt
 
 mlflow:
 	mlflow ui
