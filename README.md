@@ -1,6 +1,6 @@
-# Cats vs Dogs — End-to-End MLOps Pipeline
+﻿# Cats vs Dogs â€” End-to-End MLOps Pipeline
 
-**BITS Pilani · MLOps (S1-25_AIMLCZG523) · Assignment 2**
+**BITS Pilani Â· MLOps (S1-25_AIMLCZG523) Â· Assignment 2**
 Sreenivasulu Remuri
 
 Repository: `https://github.com/sreekeerthi38/mlops-catsdogs`
@@ -10,23 +10,21 @@ An end-to-end pipeline covering model building and experiment tracking (M1),
 packaging and containerization (M2), CI (M3), CD and deployment (M4), and
 monitoring plus post-deployment performance tracking (M5).
 
-> Fill in the two result tables below from your own run before submitting —
-> they are the fastest way for an examiner to see the pipeline produced real
-> numbers. `CHANGES.md` lists the exact command sequence.
-
+> Fill in the two result tables below from your own run before submitting â€”
 ## Results
 
 | Architecture | Trainable params | Epochs | Test images | Test accuracy |
 |---|---|---|---|---|
-| `simple_cnn` (from scratch) | ~97k | 3 | 200 | 0.63 |
-| `mobilenet_v2` (frozen backbone) | ~2.5k | 3 | 200 | _fill in_ |
+| `simple_cnn` (from scratch) | 98,178 | 3 | 200 | 0.64 |
+| `mobilenet_v2` (frozen backbone) | 2,562 | 3 | 200 | **0.97** |
 
 | Post-deployment (M5) | Value |
 |---|---|
-| Samples | _fill in_ |
-| Accuracy | _fill in_ |
-| Mean latency | _fill in_ |
-| p95 latency | _fill in_ |
+| Model | `mobilenet_v2` |
+| Samples | 200 |
+| Accuracy | 0.97 |
+| Mean latency | 29.6 ms |
+| p95 latency | 36.8 ms |
 
 Source artifacts: `models/confusion_matrix.png`, `models/loss_curve.png`,
 `models/labels.json`, `models/perf_report.json`, and the MLflow run store.
@@ -35,7 +33,7 @@ Source artifacts: `models/confusion_matrix.png`, `models/loss_curve.png`,
 
 | Concern | Choice | Why |
 |---|---|---|
-| Framework | PyTorch — `SimpleCNN` baseline + frozen MobileNetV2 | Both train on CPU in minutes over a 2000-image subset; two runs give MLflow a real comparison |
+| Framework | PyTorch â€” `SimpleCNN` baseline + frozen MobileNetV2 | Both train on CPU in minutes over a 2000-image subset; two runs give MLflow a real comparison |
 | Experiment tracking | MLflow (local file store) | No server to run; `mlflow ui` browses runs, params, metrics, artifacts |
 | Data versioning | DVC with a local remote | Versions `data/processed` without cloud storage |
 | Model versioning | Git-LFS on `models/*.pt` | The Docker build copies the model from the checkout, so it must be in the repo |
@@ -43,7 +41,7 @@ Source artifacts: `models/confusion_matrix.png`, `models/loss_curve.png`,
 | CI | GitHub Actions | Builds and tests on every push and PR; publishes from `main` |
 | Registry | GitHub Container Registry | Free, authenticated by the automatic `GITHUB_TOKEN` |
 | Deploy target | Docker Compose (Kubernetes manifests in `k8s/` as an alternative) | Lowest-friction target that still exercises a genuine registry pull |
-| CD | GitHub Actions on a self-hosted runner | Pulls from GHCR, restarts the stack, smoke-tests, fails the pipeline on failure |
+| CD | Watchtower polling GHCR (Actions variant retained in `cd.yml`) | Redeploys automatically without a self-hosted runner on the deploy host |
 | Monitoring | Prometheus + in-app counters | Request count, latency histogram, per-label prediction counter at `/metrics` |
 
 ## Layout
@@ -59,11 +57,11 @@ models/        model.pt (LFS), confusion_matrix.png, loss_curve.png, labels.json
 samples/       cat.jpg used by the smoke test and the demo
 ```
 
-## M1 — Model development & experiment tracking
+## M1 â€” Model development & experiment tracking
 
-**Data.** Kaggle Dogs-vs-Cats, preprocessed to 224×224 RGB, split 80/10/10 with
+**Data.** Kaggle Dogs-vs-Cats, preprocessed to 224Ã—224 RGB, split 80/10/10 with
 per-class stratification (`src/data.py::split_dataset`). Training augmentation:
-horizontal flip, ±15° rotation, colour jitter. Validation and test see resize
+horizontal flip, Â±15Â° rotation, colour jitter. Validation and test see resize
 and ImageNet normalization only.
 
 ```bash
@@ -82,7 +80,7 @@ dvc init && dvc remote add -d localremote /tmp/dvcstore
 dvc add data/processed && dvc push
 ```
 
-Git-LFS carries `models/*.pt` — the Docker build copies the model out of the
+Git-LFS carries `models/*.pt` â€” the Docker build copies the model out of the
 checkout, so an ignored or pointer-only model produces an image that answers
 503 to every prediction.
 
@@ -99,10 +97,10 @@ device, trainable parameter count and dataset sizes; per-epoch train loss, val
 loss and val accuracy; final test loss and accuracy; and the confusion matrix,
 loss curve and serialized `.pt` as artifacts.
 
-## M2 — Packaging & containerization
+## M2 â€” Packaging & containerization
 
-`/health` (liveness), `/ready` (readiness — 503 until the model loads),
-`/predict` (multipart image → label, confidence, per-class probabilities),
+`/health` (liveness), `/ready` (readiness â€” 503 until the model loads),
+`/predict` (multipart image â†’ label, confidence, per-class probabilities),
 `/metrics`, and `/` for service metadata.
 
 ```bash
@@ -118,31 +116,31 @@ docker run --rm -p 8000:8000 catsdogs-api:local
 the PyTorch CPU index (see the file header, the Dockerfile, CI and `make setup`)
 to avoid pulling CUDA wheels into a CPU-only image.
 
-## M3 — CI
+## M3 â€” CI
 
 `.github/workflows/ci.yml`, on **every push and pull request**: checkout with
-LFS → install pinned dependencies → verify `models/model.pt` is a real
-checkpoint rather than an LFS pointer → `pytest` → build the Docker image →
+LFS â†’ install pinned dependencies â†’ verify `models/model.pt` is a real
+checkpoint rather than an LFS pointer â†’ `pytest` â†’ build the Docker image â†’
 run the container and smoke-test it. On `main` only, a second job logs into
 GHCR and pushes `:latest` and `:<sha>`.
 
-Tests: `tests/test_data.py` (preprocessing — shape, dtype, greyscale handling,
+Tests: `tests/test_data.py` (preprocessing â€” shape, dtype, greyscale handling,
 normalization range, type rejection), `tests/test_inference.py` (model forward
 pass and the `predict` utility), `tests/test_api.py` (liveness, readiness under
 a missing model, 503 on predict, metrics exposure).
 
-## M4 — CD & deployment
+## M4 â€” CD & deployment
 
-**Target:** Docker Compose — `api` (from GHCR) plus `prometheus`.
+**Target:** Docker Compose â€” `api` (from GHCR) plus `prometheus`.
 `.github/workflows/cd.yml` runs on a self-hosted runner after CI succeeds on
-`main`: checkout with LFS → verify the model is not a pointer →
-`docker compose pull && docker compose up -d` → poll `/ready` →
+`main`: checkout with LFS â†’ verify the model is not a pointer â†’
+`docker compose pull && docker compose up -d` â†’ poll `/ready` â†’
 `scripts/smoke_test.sh`. A failing smoke test fails the pipeline.
 
 Kubernetes alternative in `k8s/`: Deployment with `readinessProbe` on `/ready`
 and `livenessProbe` on `/health`, plus a NodePort Service on 30080.
 
-## M5 — Monitoring, logs & post-deployment performance
+## M5 â€” Monitoring, logs & post-deployment performance
 
 Middleware logs method, path, status and latency for every request and **never**
 logs image bytes or response bodies. Metrics at `/metrics`:
@@ -172,3 +170,22 @@ make up               # docker compose up
 make smoke            # post-deploy smoke test
 make perf             # post-deploy performance report
 ```
+
+
+
+## CD mechanism
+
+Automatic redeployment is handled by **Watchtower**, which polls GHCR every 30
+seconds and recreates `catsdogs-api` whenever `:latest` changes. A merge to
+`main` therefore deploys unattended: CI publishes the image, Watchtower picks
+it up within 30s.
+
+`.github/workflows/cd.yml` implements the GitHub Actions variant (LFS checkout,
+model-pointer verification, `docker compose pull`, readiness wait, smoke test
+with pipeline failure on error) and is retained for reference. It requires a
+self-hosted runner on the deploy host, since GitHub-hosted runners cannot reach a
+service on localhost; it is set to `workflow_dispatch` only.
+
+Note: the upstream `containrrr/watchtower` image is unmaintained and fails
+against current Docker API versions (`client version 1.25 is too old`). The
+maintained fork `nickfedor/watchtower` is used instead.
