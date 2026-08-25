@@ -13,23 +13,33 @@ spec:
     metadata:
       labels:
         app: catsdogs-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8000"
     spec:
+      # Required only while the GHCR package is private. Create with:
+      #   kubectl create secret docker-registry ghcr-creds \
+      #     --docker-server=ghcr.io --docker-username=<gh-user> \
+      #     --docker-password=<PAT with read:packages>
+      # Delete this block once the package is made public.
+      imagePullSecrets:
+        - name: ghcr-creds
       containers:
         - name: api
-          # replace OWNER/REPO with your GitHub repo (lowercase)
-          image: ghcr.io/OWNER/REPO:latest
+          image: ghcr.io/sreekeerthi38/mlops-catsdogs:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready        # 503 until the model is actually loaded
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health       # process-level liveness
               port: 8000
             initialDelaySeconds: 15
             periodSeconds: 20

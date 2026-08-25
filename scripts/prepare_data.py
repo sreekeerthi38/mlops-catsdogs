@@ -1,15 +1,18 @@
 """Prepare the dataset into an ImageFolder train/val/test split.
 
+Defaults (split ratios, subset size, image size) come from params.yaml so the
+run is reproducible from a single tracked config file; CLI flags override.
+
 Two modes:
 
-1) Real Kaggle data (Dogs vs Cats):
-     python scripts/prepare_data.py --raw-dir /path/to/kaggle_extracted --subset 2000
+1) Real Kaggle data (Dogs vs Cats) -- what the assignment requires:
+     python scripts/prepare_data.py --raw-dir data/raw/train --subset 2000
    Handles both common layouts:
      (a) flat folder of files named  cat.0.jpg / dog.0.jpg
      (b) class subfolders            cats/*.jpg , dogs/*.jpg  (or Cat/ Dog/)
 
-2) Synthetic data (no download needed -- lets you exercise the whole pipeline
-   and CI instantly, then swap in real data later):
+2) Synthetic data -- smoke-testing the plumbing only. NEVER report metrics
+   from a synthetic run as assignment results:
      python scripts/prepare_data.py --synthetic --per-class 60
 
 Output: data/processed/{train,val,test}/{cats,dogs}
@@ -17,6 +20,7 @@ Output: data/processed/{train,val,test}/{cats,dogs}
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -24,8 +28,8 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.config import PROCESSED_DIR  # noqa: E402
-from src.data import split_dataset    # noqa: E402
+from src.config import PROCESSED_DIR, load_params  # noqa: E402
+from src.data import split_dataset                 # noqa: E402
 
 IMG_EXT = {".jpg", ".jpeg", ".png", ".bmp"}
 
@@ -64,35 +68,52 @@ def collect_pairs(raw_dir: Path) -> list[tuple[Path, str]]:
     return pairs
 
 
-def make_synthetic(out_root: Path, per_class: int, seed: int = 0) -> Path:
-    """Create tiny colored-noise images so the pipeline runs without Kaggle."""
+def make_synthetic(out_root: Path, per_class: int, size: int = 224, seed: int = 0) -> Path:
+    """Create tiny colored-noise images so the pipeline runs without Kaggle.
+
+    The addition is done in int16 before clipping. Adding a Python int to a
+    uint8 array wraps at 256 *before* np.clip can act, which turned bright
+    tinted pixels into near-black ones and destroyed the class signal.
+    """
     rng = np.random.default_rng(seed)
     tmp = out_root / "_synthetic_raw"
-    for cls, tint in (("cats", (200, 120, 120)), ("dogs", (120, 120, 200))):
+    # Same orphan trap as split_dataset: filenames are index-based, so a rerun
+    # with a smaller --per-class leaves the previous run's extra images behind
+    # and the "new" dataset is silently the old, larger one.
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    for cls, tint in (("cats", (200, 60, 60)), ("dogs", (60, 60, 200))):
         d = tmp / cls
         d.mkdir(parents=True, exist_ok=True)
+        tint_arr = np.array(tint, dtype=np.int16)
         for i in range(per_class):
-            base = rng.integers(0, 60, (224, 224, 3), dtype=np.uint8)
-            base[..., 0] = np.clip(base[..., 0] + tint[0], 0, 255)
-            base[..., 2] = np.clip(base[..., 2] + tint[2], 0, 255)
-            Image.fromarray(base).save(d / f"{cls[:-1]}.{i}.jpg")
+            base = rng.integers(0, 60, (size, size, 3), dtype=np.uint8).astype(np.int16)
+            img = np.clip(base + tint_arr, 0, 255).astype(np.uint8)
+            Image.fromarray(img).save(d / f"{cls[:-1]}.{i}.jpg")
     return tmp
 
 
 def main() -> None:
+    params = load_params().get("data", {})
+    split = tuple(params.get("split", [0.8, 0.1, 0.1]))
+    img_size = int(params.get("img_size", 224))
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--raw-dir", type=str, help="folder with extracted Kaggle images")
     ap.add_argument("--out-dir", type=str, default=str(PROCESSED_DIR))
-    ap.add_argument("--subset", type=int, default=0, help="cap total images (0 = all)")
+    ap.add_argument("--subset", type=int, default=int(params.get("subset", 0)),
+                    help="cap total images (0 = all); default from params.yaml")
     ap.add_argument("--synthetic", action="store_true", help="generate synthetic data")
     ap.add_argument("--per-class", type=int, default=60, help="synthetic images per class")
+    ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
 
     if args.synthetic:
-        raw_dir = make_synthetic(out_dir.parent, args.per_class)
+        raw_dir = make_synthetic(out_dir.parent, args.per_class, size=img_size)
         print(f"[synthetic] generated -> {raw_dir}")
+        print("[synthetic] WARNING: plumbing check only -- do not report these metrics.")
     elif args.raw_dir:
         raw_dir = Path(args.raw_dir)
     else:
@@ -109,8 +130,9 @@ def main() -> None:
         dogs = [p for p in pairs if p[1] == "dogs"][: args.subset // 2]
         pairs = cats + dogs
 
-    counts = split_dataset(pairs, out_dir)
-    print(f"[done] {sum(counts.values())} images -> {out_dir}  splits={counts}")
+    counts = split_dataset(pairs, out_dir, ratios=split, seed=args.seed, clean=True)
+    print(f"[done] {sum(counts.values())} images -> {out_dir}  "
+          f"splits={counts}  ratios={split}")
 
 
 if __name__ == "__main__":

@@ -5,23 +5,27 @@ __pycache__/
 venv/
 .env
 
-# Data & models (tracked by DVC, not Git)
+# Raw + processed data: versioned with DVC, not Git
+data/raw/
 data/processed/
 data/_synthetic_raw/
 data/*.zip
-models/*.pt
-models/*.png
-models/*.json
 
-# MLflow
-mlruns/
-mlartifacts/
-
-# DVC
+# NOTE: models/ is intentionally NOT ignored.
+# models/*.pt is tracked with Git-LFS (.gitattributes) because the Docker build
+# does `COPY models/ ./models/` from the CI checkout. Ignoring it ships an image
+# with no model, and /predict returns 503 forever.
 .dvc/cache/
 .dvc/tmp/
+
+# MLflow local store (large); artifacts are copied into models/ instead
+mlartifacts/
 
 # Test / tooling
 .pytest_cache/
 .coverage
 htmlcov/
+
+# MLflow local run store (large; evidence is the screenshot + models/*.png)
+mlruns/
+mlruns_backup.zip

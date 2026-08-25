@@ -1,4 +1,6 @@
 # Central hyperparameters. Edit here instead of hard-coding in scripts.
+# Both scripts/prepare_data.py and src/train.py read this file, so a run is
+# reproducible from the committed config alone.
 data:
   img_size: 224
   split: [0.8, 0.1, 0.1]   # train / val / test
@@ -6,6 +8,7 @@ data:
 
 train:
   experiment: cats-vs-dogs
+  arch: mobilenet_v2       # simple_cnn | mobilenet_v2
   epochs: 3
   batch_size: 32
   lr: 0.001

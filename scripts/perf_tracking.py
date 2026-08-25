@@ -50,6 +50,10 @@ def main() -> None:
     ap.add_argument("--out", default="models/perf_report.json")
     args = ap.parse_args()
 
+    if args.synthetic:
+        print("[WARNING] --synthetic sends random noise with fabricated labels. "
+              "The accuracy below is meaningless and must NOT be reported as an "
+              "assignment result. Use the real test split instead.")
     source = iter_synthetic(args.n) if args.synthetic else iter_test_images(Path(args.test_dir))
 
     total, correct, latencies = 0, 0, []
@@ -70,7 +74,18 @@ def main() -> None:
             confusion[true][pred] += 1
         records.append({"file": name, "true": true, "pred": pred, "latency_ms": round(dt, 1)})
 
+    # Provenance: without these fields a stale report is indistinguishable from
+    # a current one, and a synthetic run reads like a real 100% result.
+    try:
+        meta = requests.get(f"{args.base_url}/", timeout=10).json()
+    except Exception:  # noqa: BLE001
+        meta = {}
+
     report = {
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "source": "synthetic-noise (NOT A VALID RESULT)" if args.synthetic else args.test_dir,
+        "served_arch": meta.get("arch", "unknown"),
+        "service_version": meta.get("version", "unknown"),
         "samples": total,
         "accuracy": round(correct / total, 4) if total else None,
         "avg_latency_ms": round(float(np.mean(latencies)), 1) if latencies else None,
