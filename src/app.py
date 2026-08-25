@@ -1,4 +1,4 @@
-"""M2 + M5: FastAPI inference service.
+﻿"""M2 + M5: FastAPI inference service.
 
 Endpoints
 ---------
@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Cats vs Dogs Classifier", version="1.0.1", lifespan=lifespan)
+app = FastAPI(title="Cats vs Dogs Classifier", version="1.0.2", lifespan=lifespan)
 
 
 @app.middleware("http")
