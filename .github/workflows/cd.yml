@@ -12,12 +12,7 @@ name: CD
 # terminal cannot kill your demo, and make sure Docker Desktop starts first.
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: [main]
-  workflow_dispatch:        # trigger the deploy by hand during the recording
-
+  workflow_dispatch:
 jobs:
   deploy:
     # only deploy if the CI run actually succeeded
