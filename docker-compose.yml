@@ -36,3 +36,14 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+
+  # M4 CD: polls GHCR every 30s and redeploys catsdogs-api when :latest changes.
+  # Used instead of the GitHub Actions self-hosted runner in .github/workflows/cd.yml,
+  # which is retained for reference.
+  watchtower:
+    image: nickfedor/watchtower:latest
+    container_name: catsdogs-watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 30 --cleanup catsdogs-api
+    restart: unless-stopped

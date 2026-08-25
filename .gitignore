@@ -29,3 +29,12 @@ htmlcov/
 # MLflow local run store (large; evidence is the screenshot + models/*.png)
 mlruns/
 mlruns_backup.zip
+
+# GitHub Actions runner package (never belongs in the repo)
+actions-runner*/
+config.cmd
+run.cmd
+run-helper.*
+svc.ps1
+externals/
+bin/Runner.*
