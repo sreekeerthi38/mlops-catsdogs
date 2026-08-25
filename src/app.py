@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Cats vs Dogs Classifier", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Cats vs Dogs Classifier", version="1.0.1", lifespan=lifespan)
 
 
 @app.middleware("http")
