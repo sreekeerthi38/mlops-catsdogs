@@ -1,7 +1,7 @@
 ﻿# Cats vs Dogs End-to-End MLOps Pipeline
 
-**BITS Pilani Â· MLOps (S1-25_AIMLCZG523) Â· Assignment 2**
-Sreenivasulu Remuri
+**BITS Pilani · MLOps (S1-25_AIMLCZG523) · Assignment 2**
+Sreekeerthi injeti
 
 Repository: `https://github.com/sreekeerthi38/mlops-catsdogs`
 Container image: `ghcr.io/sreekeerthi38/mlops-catsdogs:latest`
