@@ -10,7 +10,7 @@ An end-to-end pipeline covering model building and experiment tracking (M1),
 packaging and containerization (M2), CI (M3), CD and deployment (M4), and
 monitoring plus post-deployment performance tracking (M5).
 
-> Fill in the two result tables below from your own run before submitting â€”
+
 ## Results
 
 | Architecture | Trainable params | Epochs | Test images | Test accuracy |
