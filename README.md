@@ -1,4 +1,4 @@
-﻿# Cats vs Dogs â€” End-to-End MLOps Pipeline
+﻿# Cats vs Dogs End-to-End MLOps Pipeline
 
 **BITS Pilani Â· MLOps (S1-25_AIMLCZG523) Â· Assignment 2**
 Sreenivasulu Remuri
